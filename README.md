@@ -44,8 +44,8 @@ FAQ
 **Q:** Why doesn't `fixmp4` delete the old files?<br/>
 **A:** I don't fully trust it yet to not do anything stupid. In particular, I don't think this does a great job handling error codes from `ffmpeg`.
 
-**Q:** Why does this application crashes on my RaspberryPi / FreeBSD / Minix / TRS-80 machine?<br/>
-**A:** Most likely this is because of `ffmpeg`. It neesds a recent version and it appears that recent version works best on X86_64 Linux or X86_64 Mac OS systems. I just know it doesn't work Arm.
+**Q:** Why does this application crash on my RaspberryPi / FreeBSD / Minix / TRS-80 machine?<br/>
+**A:** Most likely this is because of `ffmpeg`. It neesds a recent version and it appears that recent version works best on X86_64 Linux or X86_64 Mac OS systems. I just know it doesn't work ARM.
 
 Bugs
 ----
