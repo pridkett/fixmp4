@@ -107,7 +107,7 @@ def process_dir(dirname: str) -> None:
     outfilename = next(tempfile._get_candidate_names()) + ".mp4"
 
     def transcode():
-        logger.info("writing recontainered file to: %s", outfilename)
+        logger.info("writing remuxed file to: %s", outfilename)
         outcommand = [
             "ffmpeg",
             "-v",
@@ -150,7 +150,7 @@ def process_dir(dirname: str) -> None:
     with open(json_metafile, "w") as f:
         json.dump(json_metadata, f)
 
-    logger.info("calculating recontainered md5")
+    logger.info("calculating remuxed md5")
     md5sum = md5(os.path.join(dirname, outfilename), desc=f"converted md5 {video}")
     json_metadata["new"]["md5"] = md5sum
 
@@ -159,8 +159,9 @@ def process_dir(dirname: str) -> None:
     os.rename(os.path.join(dirname, video), os.path.join(dirname, original_moved))
     json_metadata["original"]["target"] = original_moved
 
-    new_moved = dirname + ".mp4"
-    os.rename(os.path.join(dirname, outfilename), os.path.join(dirname, new_moved))
+    new_moved = os.path.join(dirname, os.path.basename(dirname)+".mp4")
+    os.rename(os.path.join(dirname, outfilename), new_moved)
+    logger.info("renamed %s to %s", os.path.join(dirname, outfilename), new_moved)
     json_metadata["new"]["target"] = os.path.basename(new_moved)
 
     # add in the metadata to show when the task was completed
