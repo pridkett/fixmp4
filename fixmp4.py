@@ -60,6 +60,23 @@ def md5(fname: str, desc: str = None) -> str:
     return hash_md5.hexdigest()
 
 
+def get_ffmpeg_version() -> str:
+    """Invoke ffmpeg to return the version string
+
+    I found that weird things were happening in the program and that some of
+    these issues might've been from different ffmpeg versions. This allows the
+    program to fetch the ffmpeg version and record it later.
+    """
+
+    outcommand = [
+        "ffmpeg",
+        "-version",
+    ]
+    logger.info("command: %s", " ".join(outcommand))
+    result = subprocess.run(outcommand, capture_output=True)
+    return result.stdout.decode("utf-8")
+
+
 def process_dir(dirname: str) -> None:
     """Iterate and process the video in a directory."""
     logger.info("processing: %s", dirname)
@@ -123,6 +140,8 @@ def process_dir(dirname: str) -> None:
         logger.info("command: %s", " ".join(outcommand))
         subprocess.run(outcommand, stdout=sys.stdout.buffer, stderr=sys.stdout.buffer)
 
+    json_metadata["ffmpeg"] = get_ffmpeg_version()
+
     p = Process(target=transcode)
     p.start()
 
@@ -159,7 +178,7 @@ def process_dir(dirname: str) -> None:
     os.rename(os.path.join(dirname, video), os.path.join(dirname, original_moved))
     json_metadata["original"]["target"] = original_moved
 
-    new_moved = os.path.join(dirname, os.path.basename(dirname)+".mp4")
+    new_moved = os.path.join(dirname, os.path.basename(dirname) + ".mp4")
     os.rename(os.path.join(dirname, outfilename), new_moved)
     logger.info("renamed %s to %s", os.path.join(dirname, outfilename), new_moved)
     json_metadata["new"]["target"] = os.path.basename(new_moved)
