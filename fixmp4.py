@@ -12,13 +12,14 @@ import datetime
 import hashlib
 import json
 import os
+import re
 import tempfile
 import subprocess
 import sys
 
 from multiprocessing import Process
 
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from tqdm import tqdm
 
@@ -44,12 +45,7 @@ def md5(fname: str, desc: str = None) -> str:
     if desc is None:
         desc = f"md5 {os.path.basename(fname)}"
     with tqdm(
-        total=os.path.getsize(fname),
-        unit="B",
-        unit_scale=True,
-        miniters=1,
-        desc=desc,
-        leave=False,
+        total=os.path.getsize(fname), unit="B", unit_scale=True, miniters=1, desc=desc, leave=False,
     ) as pbar:
         with open(fname, "rb") as f:
             ctr = 0
@@ -75,6 +71,33 @@ def get_ffmpeg_version() -> str:
     logger.info("command: %s", " ".join(outcommand))
     result = subprocess.run(outcommand, capture_output=True)
     return result.stdout.decode("utf-8")
+
+
+def get_blocked_streams(filename: str) -> List[str]:
+    """Get a list of streams that are eia_608.
+
+    These are typically closed captioning tracks, but they're not officially
+    supported in mp4 containers and it turns out that these tracks have been
+    the problematic streams.
+
+    This method coule be easily expanded to add additional codecs by adding
+    them to the `BLOCKED_CODECS` list.
+    """
+    BLOCKED_CODECS = ["eia_608"]
+
+    outcommand = ["ffprobe", "-show_streams", "-of", "json", filename]
+    logger.info("command: %s", " ".join(outcommand))
+    result = subprocess.run(outcommand, capture_output=True)
+
+    if result.returncode != 0:
+        logger.fatal("ffprobe exit code is %d - this indicates an error", result.returncode)
+        sys.exit(1)
+
+    out_streams = []  # type: List[str]
+    for stream in json.loads(result.stdout.decode("utf-8")).get("streams", []):
+        if stream.get("codec_name", "") in BLOCKED_CODECS:
+            out_streams.append(f"0:{stream.get('index')}")
+    return out_streams
 
 
 def process_dir(dirname: str) -> None:
@@ -123,6 +146,9 @@ def process_dir(dirname: str) -> None:
     # run the conversion command
     outfilename = next(tempfile._get_candidate_names()) + ".mp4"
 
+    blocked_tracks = get_blocked_streams(os.path.join(dirname, video))
+    logger.info("eia_608 tracks: %s", blocked_tracks)
+
     def transcode():
         logger.info("writing remuxed file to: %s", outfilename)
         outcommand = [
@@ -135,8 +161,10 @@ def process_dir(dirname: str) -> None:
             "copy",
             "-map",
             "0",
-            os.path.join(dirname, outfilename),
         ]
+        for track in blocked_tracks:
+            outcommand = outcommand + ["-map", f"-{track}"]
+        outcommand.append(os.path.join(dirname, outfilename))
         logger.info("command: %s", " ".join(outcommand))
         subprocess.run(outcommand, stdout=sys.stdout.buffer, stderr=sys.stdout.buffer)
 
@@ -163,12 +191,11 @@ def process_dir(dirname: str) -> None:
             if p.exitcode is not None:
                 break
 
+    logger.warning("exitcode %d", p.exitcode)
     # get the final filesize of the output filename
     if os.path.getsize(os.path.join(dirname, outfilename)) == 0:
         os.remove(os.path.join(dirname, outfilename))
-        logger.fatal(
-            "Converstion error - output file size of %s is 0 bytes", outfilename
-        )
+        logger.fatal("Converstion error - output file size of %s is 0 bytes", outfilename)
         sys.exit(1)
 
     json_metadata["new"] = {"filename": outfilename}
@@ -196,9 +223,7 @@ def process_dir(dirname: str) -> None:
     completion_time = datetime.datetime.now(datetime.timezone.utc)
     json_metadata["status"] = STATUS_COMPLETE
     json_metadata["timestamp"] = int(completion_time.timestamp())
-    json_metadata["isotimestamp"] = completion_time.astimezone().isoformat(
-        timespec="seconds"
-    )
+    json_metadata["isotimestamp"] = completion_time.astimezone().isoformat(timespec="seconds")
 
     with open(json_metafile, "w") as f:
         json.dump(json_metadata, f)
@@ -233,11 +258,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "dirname",
-        action="store",
-        default=os.getcwd(),
-        nargs="?",
-        help="directory to work within",
+        "dirname", action="store", default=os.getcwd(), nargs="?", help="directory to work within",
     )
 
     args = parser.parse_args()
