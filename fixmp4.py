@@ -163,6 +163,14 @@ def process_dir(dirname: str) -> None:
             if p.exitcode is not None:
                 break
 
+    # get the final filesize of the output filename
+    if os.path.getsize(os.path.join(dirname, outfilename)) == 0:
+        os.remove(os.path.join(dirname, outfilename))
+        logger.fatal(
+            "Converstion error - output file size of %s is 0 bytes", outfilename
+        )
+        sys.exit(1)
+
     json_metadata["new"] = {"filename": outfilename}
 
     # incrementally save the metadata
